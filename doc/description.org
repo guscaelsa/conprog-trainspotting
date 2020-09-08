@@ -1,0 +1,8 @@
+[[./map.png]]
+
++ A ... B :: Places of interest.
++ S, T :: We call the northern station is $S$, the southern station $T$.
++ a ... j :: Different pieces of the track.
++ D_x :: Placement of the sensors. Corresponds to ~sensors[x]~.
++ S_x :: The switches. Corresponds to ~switches[x]~.
++ L_x :: The semaphores, which are binary and treated as locks. Corresponds to ~locks[x]~.
