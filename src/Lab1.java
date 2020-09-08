@@ -1,5 +1,4 @@
 import TSim.*;
-import javafx.util.Pair;
 
 import java.util.Objects;
 import java.util.concurrent.Semaphore;
@@ -121,18 +120,6 @@ class TrainDriver implements Runnable {
 class Map {
   public static String filename = "Lab1.map";
 
-  static final SensorPos sr_topS = new SensorPos(14, 3);
-  static final SensorPos sr_botS = new SensorPos(14, 5);
-  static final SensorPos sr_botSS = new SensorPos(10, 5);
-  static final SensorPos sr_topSS = new SensorPos(6, 5);
-  static final SensorPos sr_topTT = new SensorPos(5, 11);
-  static final SensorPos sr_botTT = new SensorPos(5, 13);
-  static final SensorPos sr_topT = new SensorPos(14, 11);
-  static final SensorPos sr_botT = new SensorPos(14, 13);
-
-  static final SensorPos sr_enterS = new SensorPos(19,8);
-  static final SensorPos sr_enterT = new SensorPos(1,11);
-
   static final SensorPos[] sensors = {
           new SensorPos(14, 3), // 0
           new SensorPos(14, 5),
@@ -174,10 +161,6 @@ class Map {
           new Semaphore(0), // i
           new Semaphore(1), // j
   };
-
-  static final Semaphore sem_botS = new Semaphore(1);
-  static final Semaphore sem_middle = new Semaphore(1);
-  static final Semaphore sem_topT = new Semaphore(0);
 
   SouthBoundBrain brainA = new SouthBoundBrain();
   NorthBoundBrain brainB = new NorthBoundBrain();
@@ -228,9 +211,7 @@ class Map {
       }
 
       if (pos.equals(sensors[12]) || pos.equals(sensors[13])) {
-        System.out.println("Train #" + drv.trainId + " wants lock #" + 6);
         drv.waitFor(locks[6]);
-        System.out.println("Train #" + drv.trainId + " got lock #" + 6);
         if (pos.equals(sensors[12])) {
           switches[2].turn_left(drv.tsi);
         } else {
@@ -244,7 +225,7 @@ class Map {
           switches[3].turn_left(drv.tsi);
         } else {
           if (!locks[8].tryAcquire()) {
-            throw new AssertionError("Both L4 and L5 locked! I'm starving!");
+            throw new AssertionError("Both L7 and L8 are locked!");
           }
           switches[3].turn_right(drv.tsi);
         }
@@ -252,7 +233,6 @@ class Map {
       }
 
       if (pos.equals(sensors[16]) || pos.equals(sensors[17])) {
-        System.out.println("Train #" + drv.trainId + " releasing lock #" + 6);
         locks[6].release();
         return false;
       }
@@ -343,7 +323,7 @@ class Map {
           switches[0].turn_left(drv.tsi);
         } else {
           if (!locks[0].tryAcquire()) {
-            throw new AssertionError("Both L4 and L5 locked! I'm starving!");
+            throw new AssertionError("Both L1 and L0 are locked!");
           }
           switches[0].turn_right(drv.tsi);
         }
@@ -395,17 +375,6 @@ class Map {
       }
       return false;
     }
-
-  }
-}
-
-class help {
-  public static <T> void print(T... args) {
-    for(T pts: args) {
-      System.out.print(pts);
-      System.out.print(" ");
-    }
-    System.out.println();
   }
 }
 
