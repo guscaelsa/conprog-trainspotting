@@ -21,6 +21,22 @@ class TrainDriver implements Runnable {
   TSimInterface tsi;
   int speed;
 
+  public void advanceWith(Semaphore lock) throws CommandException {
+    if (!lock.tryAcquire()) {
+      stop();
+      lock.acquireUninterruptibly();
+      advance();
+    }
+  }
+
+  public void reverseWith(Semaphore lock) throws CommandException {
+    if (!lock.tryAcquire()) {
+      stop();
+      lock.acquireUninterruptibly();
+      reverse();
+    }
+  }
+
   interface Brain {
     boolean on_exit_sensor(SensorPos pos, TrainDriver drv) throws CommandException;
     boolean on_enter_sensor(SensorPos pos, TrainDriver drv) throws CommandException, InterruptedException;
@@ -115,11 +131,46 @@ class Map {
   static final SensorPos sr_enterS = new SensorPos(19,8);
   static final SensorPos sr_enterT = new SensorPos(1,11);
 
-  static final SwitchPos switches[] = {
+  static final SensorPos[] sensors = {
+          new SensorPos(14, 3),
+          new SensorPos(14, 5),
+          new SensorPos(6, 5),
+          new SensorPos(10, 5),
+          new SensorPos(11, 7),
+          new SensorPos(10, 8),
+          new SensorPos(14, 7),
+          new SensorPos(15, 8),
+          new SensorPos(19, 8),
+          new SensorPos(18, 9),
+          new SensorPos(12, 9),
+          new SensorPos(13, 10),
+          new SensorPos(7, 9),
+          new SensorPos(6, 10),
+          new SensorPos(1, 9),
+          new SensorPos(1, 10),
+          new SensorPos(6, 11),
+          new SensorPos(4, 13),
+          new SensorPos(14, 11),
+          new SensorPos(14, 13),
+  };
+
+  static final SwitchPos[] switches = {
           new SwitchPos(17, 7),
           new SwitchPos(15, 9),
           new SwitchPos(4, 9),
           new SwitchPos(3, 11),
+  };
+
+  static final Semaphore[] locks = {
+          new Semaphore(0), // a/c
+          new Semaphore(1), // b/d
+          new Semaphore(1), // crossroad
+          new Semaphore(1), // e
+          new Semaphore(1), // f
+          new Semaphore(1), // g
+          new Semaphore(1), // h
+          new Semaphore(0), // i
+          new Semaphore(1), // j
   };
 
   static final Semaphore sem_botS = new Semaphore(1);
@@ -136,51 +187,100 @@ class Map {
     }
 
     @Override
-    public boolean on_exit_sensor(SensorPos pos, TrainDriver drv) throws CommandException {
-      if (pos.equals(sr_topTT) || pos.equals(sr_botTT)) {
-        sem_middle.release();
-      }
-
-      if (pos.equals(sr_botSS)) {
-        sem_botS.release();
-      }
-      return false;
-    }
-
-    @Override
     public boolean on_enter_sensor(SensorPos pos, TrainDriver drv) throws CommandException, InterruptedException {
-      if (pos.equals(sr_topSS) || pos.equals(sr_botSS)) {
-        if (!sem_middle.tryAcquire()) {
-          drv.stop();
-          sem_middle.acquireUninterruptibly();
-          drv.advance();
-        }
+      if (pos.equals(sensors[2]) || pos.equals(sensors[3])) {
+        drv.advanceWith(locks[2]);
+        return false;
+      }
 
-        if (pos.equals(sr_topSS)) {
+      if (pos.equals(sensors[4]) || pos.equals(sensors[5])) {
+        locks[2].release();
+        return false;
+      }
+
+      if (pos.equals(sensors[6]) || pos.equals(sensors[7])) {
+        drv.advanceWith(locks[3]);
+        if (pos.equals(sensors[6])) {
           switches[0].turn_right(drv.tsi);
         } else {
           switches[0].turn_left(drv.tsi);
         }
-        switches[1].turn_right(drv.tsi);
-        switches[2].turn_left(drv.tsi);
-        switches[3].turn_right(drv.tsi);
         return false;
       }
 
-      if (pos.equals(sr_enterT)) {
-        if (sem_topT.tryAcquire()) {
-          switches[3].turn_left(drv.tsi);
+      if (pos.equals(sensors[9])) {
+        if (locks[4].tryAcquire()) {
+          switches[1].turn_right(drv.tsi);
         } else {
-          switches[3].turn_right(drv.tsi);
+          if (!locks[5].tryAcquire()) {
+            throw new AssertionError("Both L4 and L5 locked! I'm starving!");
+          }
+          switches[1].turn_left(drv.tsi);
         }
+        return false;
       }
 
-      if (pos.equals(sr_botT) || pos.equals(sr_topT)) {
+      if (pos.equals(sensors[10]) || pos.equals(sensors[11])) {
+        locks[3].release();
+        return false;
+      }
+
+      if (pos.equals(sensors[12]) || pos.equals(sensors[13])) {
+        drv.advanceWith(locks[6]);
+        if (pos.equals(sensors[12])) {
+          switches[2].turn_left(drv.tsi);
+        } else {
+          switches[2].turn_right(drv.tsi);
+        }
+        return false;
+      }
+
+      if (pos.equals(sensors[15])) {
+        if (locks[7].tryAcquire()) {
+          switches[3].turn_left(drv.tsi);
+        } else {
+          if (!locks[8].tryAcquire()) {
+            throw new AssertionError("Both L4 and L5 locked! I'm starving!");
+          }
+          switches[3].turn_right(drv.tsi);
+        }
+        return false;
+      }
+
+      if (pos.equals(sensors[16]) || pos.equals(sensors[17])) {
+        locks[6].release();
+        return false;
+      }
+
+
+      if (pos.equals(sensors[18]) || pos.equals(sensors[19])) {
         drv.stop();
         Thread.sleep(1000 + 20 * Math.abs(drv.speed));
         drv.reverse();
         return true;
       }
+      return false;
+    }
+
+    @Override
+    public boolean on_exit_sensor(SensorPos pos, TrainDriver drv) throws CommandException {
+      if (pos.equals(sensors[6])) {
+        locks[0].release();
+        return false;
+      }
+      if (pos.equals(sensors[7])) {
+        locks[1].release();
+      }
+      if (pos.equals(sensors[12])) {
+        locks[4].release();
+        return false;
+      }
+
+      if (pos.equals(sensors[13])) {
+        locks[5].release();
+        return false;
+      }
+
       return false;
     }
   }
@@ -192,45 +292,72 @@ class Map {
     }
 
     @Override
-    public boolean on_exit_sensor(SensorPos pos, TrainDriver drv) throws CommandException {
-      if (pos.equals(sr_topSS) || pos.equals(sr_botSS)) {
-        sem_middle.release();
-      }
-      if (pos.equals(sr_topTT)) {
-        sem_topT.release();
-      }
-      return false;
-    }
-
-    @Override
     public boolean on_enter_sensor(SensorPos pos, TrainDriver drv) throws CommandException, InterruptedException {
-      if (pos.equals(sr_topTT) || pos.equals(sr_botTT)) {
-        if (!sem_middle.tryAcquire()) {
-          drv.stop();
-          sem_middle.acquireUninterruptibly();
-          drv.reverse();
-        }
-
-        if (pos.equals(sr_topTT)) {
+      if (pos.equals(sensors[16]) || pos.equals(sensors[17])) {
+        drv.reverseWith(locks[6]);
+        if (pos.equals(sensors[16])) {
           switches[3].turn_left(drv.tsi);
         } else {
           switches[3].turn_right(drv.tsi);
         }
-        switches[0].turn_right(drv.tsi);
-        switches[1].turn_right(drv.tsi);
-        switches[2].turn_left(drv.tsi);
         return false;
       }
 
-      if (pos.equals(sr_enterS)) {
-        if (sem_botS.tryAcquire()) {
-          switches[0].turn_left(drv.tsi);
+      if (pos.equals(sensors[14])) {
+        if (locks[4].tryAcquire()) {
+          switches[2].turn_left(drv.tsi);
         } else {
-          switches[0].turn_right(drv.tsi);
+          if (!locks[5].tryAcquire()) {
+            throw new AssertionError("Both L4 and L5 locked! I'm starving!");
+          }
+          switches[2].turn_right(drv.tsi);
         }
+        return false;
       }
 
-      if (pos.equals(sr_botS) || pos.equals(sr_topS)) {
+      if (pos.equals(sensors[12]) || pos.equals(sensors[13])) {
+        locks[6].release();
+        return false;
+      }
+
+      if (pos.equals(sensors[10]) || pos.equals(sensors[11])) {
+        drv.reverseWith(locks[3]);
+        if (pos.equals(sensors[10])) {
+          switches[1].turn_right(drv.tsi);
+        } else {
+          switches[1].turn_left(drv.tsi);
+        }
+        return false;
+      }
+
+      if (pos.equals(sensors[8])) {
+        if (locks[1].tryAcquire()) {
+          switches[0].turn_left(drv.tsi);
+        } else {
+          if (!locks[0].tryAcquire()) {
+            throw new AssertionError("Both L4 and L5 locked! I'm starving!");
+          }
+          switches[0].turn_right(drv.tsi);
+        }
+        return false;
+      }
+
+      if (pos.equals(sensors[6]) || pos.equals(sensors[7])) {
+        locks[3].release();
+        return false;
+      }
+
+      if (pos.equals(sensors[2]) || pos.equals(sensors[3])) {
+        locks[2].release();
+        return false;
+      }
+
+      if (pos.equals(sensors[4]) || pos.equals(sensors[5])) {
+        drv.advanceWith(locks[2]);
+        return false;
+      }
+
+      if (pos.equals(sensors[0]) || pos.equals(sensors[1])) {
         drv.stop();
         Thread.sleep(1000 + 20 * Math.abs(drv.speed));
         drv.advance();
@@ -238,6 +365,29 @@ class Map {
       }
       return false;
     }
+
+    @Override
+    public boolean on_exit_sensor(SensorPos pos, TrainDriver drv) throws CommandException {
+      if (pos.equals(sensors[16])) {
+        locks[7].release();
+        return false;
+      }
+      if (pos.equals(sensors[17])) {
+        locks[8].release();
+        return false;
+      }
+      if (pos.equals(sensors[10])) {
+        locks[4].release();
+        return false;
+      }
+
+      if (pos.equals(sensors[11])) {
+        locks[5].release();
+        return false;
+      }
+      return false;
+    }
+
   }
 }
 
