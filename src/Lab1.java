@@ -9,6 +9,7 @@ public class Lab1 {
 
   public Lab1(int speed1, int speed2) {
     TSimInterface tsi = TSimInterface.getInstance();
+    tsi.setDebug(false);
 
     new Thread(new TrainDriver(tsi, 1, speed1, map.brainA, map.brainB)).start();
     new Thread(new TrainDriver(tsi, 2, speed2, map.brainB, map.brainA)).start();
@@ -20,20 +21,17 @@ class TrainDriver implements Runnable {
   protected int trainId;
   TSimInterface tsi;
   int speed;
+  protected boolean reversing;
 
-  public void advanceWith(Semaphore lock) throws CommandException {
+  public void waitFor(Semaphore lock) throws CommandException {
     if (!lock.tryAcquire()) {
       stop();
       lock.acquireUninterruptibly();
-      advance();
-    }
-  }
-
-  public void reverseWith(Semaphore lock) throws CommandException {
-    if (!lock.tryAcquire()) {
-      stop();
-      lock.acquireUninterruptibly();
-      reverse();
+      if (reversing) {
+        reverse();
+      } else {
+        advance();
+      }
     }
   }
 
@@ -61,8 +59,10 @@ class TrainDriver implements Runnable {
   void advance() throws CommandException {
     if (trainId == 1) {
       tsi.setSpeed(trainId, speed);
+      reversing = false;
     } else {
       tsi.setSpeed(trainId, -1 * speed);
+      reversing = true;
     }
   }
 
@@ -73,8 +73,10 @@ class TrainDriver implements Runnable {
   void reverse() throws CommandException {
     if (trainId == 1) {
       tsi.setSpeed(trainId, -1 * speed);
+      reversing = true;
     } else {
       tsi.setSpeed(trainId, speed);
+      reversing = false;
     }
   }
 
@@ -132,24 +134,24 @@ class Map {
   static final SensorPos sr_enterT = new SensorPos(1,11);
 
   static final SensorPos[] sensors = {
-          new SensorPos(14, 3),
+          new SensorPos(14, 3), // 0
           new SensorPos(14, 5),
           new SensorPos(6, 5),
           new SensorPos(10, 5),
           new SensorPos(11, 7),
-          new SensorPos(10, 8),
+          new SensorPos(10, 8), // 5
           new SensorPos(14, 7),
           new SensorPos(15, 8),
           new SensorPos(19, 8),
           new SensorPos(18, 9),
-          new SensorPos(12, 9),
+          new SensorPos(12, 9), // 10
           new SensorPos(13, 10),
           new SensorPos(7, 9),
           new SensorPos(6, 10),
           new SensorPos(1, 9),
-          new SensorPos(1, 10),
+          new SensorPos(1, 10), // 15
           new SensorPos(6, 11),
-          new SensorPos(4, 13),
+          new SensorPos(5, 13),
           new SensorPos(14, 11),
           new SensorPos(14, 13),
   };
@@ -189,7 +191,7 @@ class Map {
     @Override
     public boolean on_enter_sensor(SensorPos pos, TrainDriver drv) throws CommandException, InterruptedException {
       if (pos.equals(sensors[2]) || pos.equals(sensors[3])) {
-        drv.advanceWith(locks[2]);
+        drv.waitFor(locks[2]);
         return false;
       }
 
@@ -199,7 +201,7 @@ class Map {
       }
 
       if (pos.equals(sensors[6]) || pos.equals(sensors[7])) {
-        drv.advanceWith(locks[3]);
+        drv.waitFor(locks[3]);
         if (pos.equals(sensors[6])) {
           switches[0].turn_right(drv.tsi);
         } else {
@@ -226,7 +228,9 @@ class Map {
       }
 
       if (pos.equals(sensors[12]) || pos.equals(sensors[13])) {
-        drv.advanceWith(locks[6]);
+        System.out.println("Train #" + drv.trainId + " wants lock #" + 6);
+        drv.waitFor(locks[6]);
+        System.out.println("Train #" + drv.trainId + " got lock #" + 6);
         if (pos.equals(sensors[12])) {
           switches[2].turn_left(drv.tsi);
         } else {
@@ -248,6 +252,7 @@ class Map {
       }
 
       if (pos.equals(sensors[16]) || pos.equals(sensors[17])) {
+        System.out.println("Train #" + drv.trainId + " releasing lock #" + 6);
         locks[6].release();
         return false;
       }
@@ -294,7 +299,9 @@ class Map {
     @Override
     public boolean on_enter_sensor(SensorPos pos, TrainDriver drv) throws CommandException, InterruptedException {
       if (pos.equals(sensors[16]) || pos.equals(sensors[17])) {
-        drv.reverseWith(locks[6]);
+        System.out.println("Train #" + drv.trainId + " wants lock #" + 6);
+        drv.waitFor(locks[6]);
+        System.out.println("Train #" + drv.trainId + " got lock #" + 6);
         if (pos.equals(sensors[16])) {
           switches[3].turn_left(drv.tsi);
         } else {
@@ -316,12 +323,13 @@ class Map {
       }
 
       if (pos.equals(sensors[12]) || pos.equals(sensors[13])) {
+        System.out.println("Train #" + drv.trainId + " releasing lock #" + 6);
         locks[6].release();
         return false;
       }
 
       if (pos.equals(sensors[10]) || pos.equals(sensors[11])) {
-        drv.reverseWith(locks[3]);
+        drv.waitFor(locks[3]);
         if (pos.equals(sensors[10])) {
           switches[1].turn_right(drv.tsi);
         } else {
@@ -353,7 +361,7 @@ class Map {
       }
 
       if (pos.equals(sensors[4]) || pos.equals(sensors[5])) {
-        drv.advanceWith(locks[2]);
+        drv.waitFor(locks[2]);
         return false;
       }
 
@@ -391,6 +399,15 @@ class Map {
   }
 }
 
+class help {
+  public static <T> void print(T... args) {
+    for(T pts: args) {
+      System.out.print(pts);
+      System.out.print(" ");
+    }
+    System.out.println();
+  }
+}
 
 class SensorPos extends Pos {
   public SensorPos(int x, int y) {
