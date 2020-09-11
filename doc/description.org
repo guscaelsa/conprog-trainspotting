@@ -1,3 +1,4 @@
+* The map
 [[./map.png]]
 
 + A ... B :: Places of interest.
@@ -6,3 +7,98 @@
 + D_x :: Placement of the sensors. Corresponds to ~sensors[x]~.
 + S_x :: The switches. Corresponds to ~switches[x]~.
 + L_x :: The semaphores, which are binary and treated as locks. Corresponds to ~locks[x]~.
+
+* Decisions
+When a train enters or exits a sensor, there are five different possible cases:
+
+** Facing approach
+When approaching a turnout facing, the train should pick a track that currently has no train on it. As there are only two trains, at least one of the tracks leading out of a turnout will always be empty. If both are empty it should pick the shortest one, which depends on the specific turnout the train is approaching.
+
+With semaphores, let ~turnA()~ be the function that sets the turnout so that the train will take the shorter track and ~lockA~ be the semaphore that guards this track. Likewise, let ~turnB()~ be the function that sets the turnout to take the other track and ~lockB~ be the semaphore that guards that track. The procedure to handle a facing approach is then:
+
+#+BEGIN_SRC java
+  if (lockA.tryAcquire()) {
+      turnA();
+  } else {
+      if (!lockB.tryAcquire()) {
+          throw new AssertionError("Both locks of fork are held.");
+      }
+      turnB();
+  }
+#+END_SRC
+
+If we design our monitors to have a ~tryEnter()~ method equivalent to ~Semaphore.tryAcquire()~, the procedure is largely unchanged:
+
+#+BEGIN_SRC java
+  if (trackA.tryEnter()) {
+      turnA();
+  } else {
+      if (!trackB.tryEnter()) {
+          throw new AssertionError("Both tracks of fork are used.");
+      }
+      turnB();
+  }
+#+END_SRC
+
+** Trailing approach
+When approaching a turnout trailing, the train must wait until the track leaving the turnout to be empty and then set the turnout to the position that will not cause derailment (as these turnout are blocking).
+
+With semaphores, let ~lock~ be the semaphore that guards the leaving track, ~stop()~ and ~start()~ be the functions that control the train, and ~turnRight~ be a boolean for whether the turnout should be turned right (or left) to prevent derailment. The procedure to handle a trailing approach is then:
+
+#+BEGIN_SRC java
+  if (!lock.tryAcquire()) {
+      stop();
+      lock.acquireUninterruptibly();
+      drive();
+  }
+
+  if (turnRight) {
+      turnout.turn_right(tsi);
+  } else {
+      turnout.turn_left(tsi);
+  }
+#+END_SRC
+
+For monitors:
+
+#+BEGIN_SRC java
+  if (!track.tryEnter()) {
+      stop();
+      track.enter();
+      drive();
+  }
+
+  if (turnRight) {
+      turnout.turn_right(tsi);
+  } else {
+      turnout.turn_left(tsi);
+  }
+#+END_SRC
+
+** Leaving track
+When leaving a track, the train must simply make sure that the track is now seen as empty.
+
+With semaphores, you just release the semaphore.
+
+With monitors, you call its ~exit()~ method.
+
+** Entering/Exiting crossroads
+With semaphores, the crossroads are guarded by a single semaphore which must be acquired on entry and released on exit. When acquiring it you must stop if you were unable to do so immediately:
+
+#+BEGIN_SRC java
+  if (!lock.tryAcquire()) {
+      stop();
+      lock.acquireUninterruptibly();
+      drive();
+  }
+#+END_SRC
+
+With monitors, you similarly:
+
+#+BEGIN_SRC java
+  if (!track.tryEnter()) {
+      stop();
+      track.enter();
+      drive();
+  }
+#+END_SRC

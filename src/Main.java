@@ -25,7 +25,7 @@ public class Main {
         int tsim_speed = (args.length >= 4) ? Integer.parseInt(args[3]) : 20;
 
         // :3
-        map = Lab1.map.filename;
+        map = Lab1Extra.map.filename;
 
         String tsim;
         if (Files.exists(Paths.get(TSIM_PATH_ON_LAB_COMPUTERS))) {
@@ -39,7 +39,7 @@ public class Main {
         Process p = Runtime.getRuntime().exec(tsimCommand);
         TSimInterface.init(p.getInputStream(), p.getOutputStream());
         TSimInterface.getInstance().setDebug(true);
-        new Lab1(train1_speed, train2_speed);
+        new Lab1Extra(train1_speed, train2_speed);
         // new Lab1Extra(train1_speed, train2_speed);
         p.waitFor();
     }

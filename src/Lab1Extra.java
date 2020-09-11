@@ -1,13 +1,15 @@
 import TSim.*;
 
 import java.util.Objects;
-import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
-public class Lab1 {
+public class Lab1Extra {
   public static Map map = new Map();
 
-  public Lab1(int speed1, int speed2) {
+  public Lab1Extra(int speed1, int speed2) {
     TSimInterface tsi = TSimInterface.getInstance();
     tsi.setDebug(false);
 
@@ -16,12 +18,59 @@ public class Lab1 {
   }
 }
 
+class MonitorLock {
+  private final Lock l = new ReentrantLock();
+  private final Condition available = l.newCondition();
+  private boolean occupied;
 
-class TrainDriver implements Runnable {
-  protected int trainId;
-  TSimInterface tsi;
-  int speed;
+  MonitorLock(boolean initial) {
+    occupied = initial;
+  }
 
+  public boolean tryEnter() {
+    l.lock();
+    try {
+      if (occupied) {
+        return false;
+      } else {
+        occupied = true;
+        return true;
+      }
+    } finally {
+      l.unlock();
+    }
+  }
+
+  public void waitEnter() {
+    l.lock();
+    try {
+      while (occupied) {
+        available.awaitUninterruptibly();
+      }
+      occupied = true;
+    } finally {
+      l.unlock();
+    }
+  }
+
+  public void exit() {
+    l.lock();
+    try {
+      if (!occupied) {
+        throw new AssertionError("Monitor exited while not occupied");
+      }
+      occupied = false;
+      available.signal();
+    } finally {
+      l.unlock();
+    }
+  }
+}
+
+class TrainDriverExtra extends TrainDriver {
+  public TrainDriverExtra(TSimInterface tsi, int trainId, int speed, Brain a, Brain b) {
+    super(tsi, trainId, speed, a, b);
+  }
   /*
   Some railway terminology:
 
@@ -36,26 +85,26 @@ class TrainDriver implements Runnable {
   ↑ Facing ↑
    */
 
-  public void waitFor(Semaphore lock) throws CommandException {
-    if (!lock.tryAcquire()) {
+  public void waitFor(MonitorLock lock) throws CommandException {
+    if (!lock.tryEnter()) {
       stop();
-      lock.acquireUninterruptibly();
+      lock.waitEnter();
       drive();
     }
   }
 
-  public void facingWait(Semaphore lockA, Consumer<TSimInterface> turnA, Semaphore lockB, Consumer<TSimInterface> turnB) {
-    if (lockA.tryAcquire()) {
+  public void facingWait(MonitorLock lockA, Consumer<TSimInterface> turnA, MonitorLock lockB, Consumer<TSimInterface> turnB) {
+    if (lockA.tryEnter()) {
       turnA.accept(tsi);
     } else {
-      if (!lockB.tryAcquire()) {
-        throw new AssertionError("Both locks of fork are held.");
+      if (!lockB.tryEnter()) {
+        throw new AssertionError("Both locks of fork are occupied.");
       }
       turnB.accept(tsi);
     }
   }
 
-  public void trailingWait(Semaphore lock, boolean turnRight, SwitchPos turnout) throws CommandException {
+  public void trailingWait(MonitorLock lock, boolean turnRight, SwitchPos turnout) throws CommandException {
       waitFor(lock);
       if (turnRight) {
           turnout.turn_right(tsi);
@@ -63,84 +112,9 @@ class TrainDriver implements Runnable {
           turnout.turn_left(tsi);
       }
   }
-
-  interface Brain {
-    boolean on_exit_sensor(SensorPos pos, TrainDriver drv) throws CommandException;
-    boolean on_enter_sensor(SensorPos pos, TrainDriver drv) throws CommandException, InterruptedException;
-
-    String adjective();
-  }
-
-  protected Brain brain;
-  protected Brain _brainA;
-  protected Brain _brainB;
-
-  public TrainDriver(TSimInterface tsi, int trainId, int speed, Brain a, Brain b) {
-    this.tsi = tsi;
-    this.trainId = trainId;
-    this.speed = speed;
-
-    _brainA = a;
-    _brainB = b;
-    brain = a;
-  }
-
-  void drive() throws CommandException {
-    tsi.setSpeed(trainId, speed);
-  }
-
-  void stop() throws CommandException {
-    tsi.setSpeed(trainId, 0);
-  }
-
-  void reverse() throws CommandException {
-    speed = -1 * speed;
-    drive();
-  }
-
-  @Override
-  public void run() {
-    try {
-      tsi.setSpeed(trainId, speed);
-
-      while (true) {
-        SensorEvent event = tsi.getSensor(trainId);
-        if (event.getTrainId() != trainId) {
-          throw new AssertionError("Thread got event for wrong train!");
-        }
-
-        boolean turn_around;
-        if (event.getStatus() == 1) {
-          turn_around = brain.on_enter_sensor(new SensorPos(event), this);
-        } else {
-          turn_around = brain.on_exit_sensor(new SensorPos(event), this);
-        }
-
-        if (turn_around) {
-          if (brain == _brainA) {
-            brain = _brainB;
-          } else {
-            brain = _brainA;
-          }
-          System.out.print("Train #");
-          System.out.print(trainId);
-          System.out.println(" is now " + brain.adjective());
-        }
-      }
-    }
-    catch (CommandException | InterruptedException e) {
-      e.printStackTrace();    // or only e.getMessage() for the error
-      System.exit(1);
-    }
-  }
-
-  // we use multiple classes, which doesn't work well when we copy-pasted for the distinction assignment.
-  public void waitFor(MonitorLock lock) throws CommandException {throw new AssertionError();}
-  public void facingWait(MonitorLock lockA, Consumer<TSimInterface> turnA, MonitorLock lockB, Consumer<TSimInterface> turnB) {throw new AssertionError();}
-  public void trailingWait(MonitorLock lock, boolean turnRight, SwitchPos turnout) throws CommandException {throw new AssertionError();}
 }
 
-class Map {
+class MapExtra {
   public static String filename = "Lab1.map";
 
   static final SensorPos[] sensors = {
@@ -173,16 +147,16 @@ class Map {
           new SwitchPos(3, 11),
   };
 
-  static final Semaphore[] locks = {
-          new Semaphore(0), // a/c
-          new Semaphore(1), // b/d
-          new Semaphore(1), // crossroad
-          new Semaphore(1), // e
-          new Semaphore(1), // f
-          new Semaphore(1), // g
-          new Semaphore(1), // h
-          new Semaphore(0), // i
-          new Semaphore(1), // j
+  static final MonitorLock[] locks = {
+          new MonitorLock(true), // a/c
+          new MonitorLock(false), // b/d
+          new MonitorLock(false), // crossroad
+          new MonitorLock(false), // e
+          new MonitorLock(false), // f
+          new MonitorLock(false), // g
+          new MonitorLock(false), // h
+          new MonitorLock(true), // i
+          new MonitorLock(false), // j
   };
 
   SouthBoundBrain brainA = new SouthBoundBrain();
@@ -202,7 +176,7 @@ class Map {
       }
 
       if (pos.equals(sensors[4]) || pos.equals(sensors[5])) {
-        locks[2].release();
+        locks[2].exit();
         return false;
       }
 
@@ -217,7 +191,7 @@ class Map {
       }
 
       if (pos.equals(sensors[10]) || pos.equals(sensors[11])) {
-        locks[3].release();
+        locks[3].exit();
         return false;
       }
 
@@ -232,7 +206,7 @@ class Map {
       }
 
       if (pos.equals(sensors[16]) || pos.equals(sensors[17])) {
-        locks[6].release();
+        locks[6].exit();
         return false;
       }
 
@@ -249,20 +223,20 @@ class Map {
     @Override
     public boolean on_exit_sensor(SensorPos pos, TrainDriver drv) throws CommandException {
       if (pos.equals(sensors[6])) {
-        locks[0].release();
+        locks[0].exit();
         return false;
       }
       if (pos.equals(sensors[7])) {
-        locks[1].release();
+        locks[1].exit();
         return false;
       }
       if (pos.equals(sensors[12])) {
-        locks[4].release();
+        locks[4].exit();
         return false;
       }
 
       if (pos.equals(sensors[13])) {
-        locks[5].release();
+        locks[5].exit();
         return false;
       }
 
@@ -289,7 +263,7 @@ class Map {
       }
 
       if (pos.equals(sensors[12]) || pos.equals(sensors[13])) {
-        locks[6].release();
+        locks[6].exit();
         return false;
       }
 
@@ -304,12 +278,12 @@ class Map {
       }
 
       if (pos.equals(sensors[6]) || pos.equals(sensors[7])) {
-        locks[3].release();
+        locks[3].exit();
         return false;
       }
 
       if (pos.equals(sensors[2]) || pos.equals(sensors[3])) {
-        locks[2].release();
+        locks[2].exit();
         return false;
       }
 
@@ -330,86 +304,23 @@ class Map {
     @Override
     public boolean on_exit_sensor(SensorPos pos, TrainDriver drv) throws CommandException {
       if (pos.equals(sensors[16])) {
-        locks[7].release();
+        locks[7].exit();
         return false;
       }
       if (pos.equals(sensors[17])) {
-        locks[8].release();
+        locks[8].exit();
         return false;
       }
       if (pos.equals(sensors[10])) {
-        locks[4].release();
+        locks[4].exit();
         return false;
       }
 
       if (pos.equals(sensors[11])) {
-        locks[5].release();
+        locks[5].exit();
         return false;
       }
       return false;
     }
-  }
-}
-
-class SensorPos extends Pos {
-  public SensorPos(int x, int y) {
-    super(x, y);
-  }
-  public SensorPos(SensorEvent event) {
-    super(event.getXpos(), event.getYpos());
-  }
-}
-
-class SwitchPos extends Pos {
-  public SwitchPos(int x, int y) {
-    super(x, y);
-  }
-
-  public void turn_left(TSimInterface tsi) {
-    try {
-      tsi.setSwitch(x, y, TSimInterface.SWITCH_LEFT);
-    } catch (CommandException e) {
-      throw new AssertionError("Invalid switch: " + x + ", " + y);
-    }
-  }
-
-  public void turn_right(TSimInterface tsi)  {
-    try {
-      tsi.setSwitch(x, y, TSimInterface.SWITCH_RIGHT);
-    } catch (CommandException e) {
-      throw new AssertionError("Invalid switch: " + x + ", " + y);
-    }
-  }
-}
-
-class Pos {
-  int x;
-  int y;
-
-  public Pos(int x, int y) {
-    this.x = x;
-    this.y = y;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
-    SensorPos sensorPos = (SensorPos) o;
-    return x == sensorPos.x &&
-            y == sensorPos.y;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(x, y);
-  }
-
-  @Override
-  public String toString() {
-    return "SensorPos{" +
-            "x=" + x +
-            ", y=" + y +
-            '}';
   }
 }
