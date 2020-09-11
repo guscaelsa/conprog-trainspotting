@@ -73,7 +73,7 @@ public class TestMap {
             if (pos.equals(sr_stationLeft)) {
                 drv.stop();
                 Thread.sleep(1000 + 20 * Math.abs(drv.speed));
-                drv.advance();
+                drv.reverse();
                 return true;
             }
             return false;

@@ -2,6 +2,7 @@ import TSim.*;
 
 import java.util.Objects;
 import java.util.concurrent.Semaphore;
+import java.util.function.Consumer;
 
 public class Lab1 {
   public static Map map = new Map();
@@ -22,16 +23,46 @@ class TrainDriver implements Runnable {
   int speed;
   protected boolean reversing;
 
+  /*
+  Some railway terminology:
+
+  Turnout = Railroad switch
+
+  ↓ Trailing ↓
+  || //
+  ||//
+  |#/
+  ||
+  ||
+  ↑ Facing ↑
+   */
+
   public void waitFor(Semaphore lock) throws CommandException {
     if (!lock.tryAcquire()) {
       stop();
       lock.acquireUninterruptibly();
-      if (reversing) {
-        reverse();
-      } else {
-        advance();
-      }
+      drive();
     }
+  }
+
+  public void facingWait(Semaphore lockA, Consumer<TSimInterface> turnA, Semaphore lockB, Consumer<TSimInterface> turnB) {
+    if (lockA.tryAcquire()) {
+      turnA.accept(tsi);
+    } else {
+      if (!lockB.tryAcquire()) {
+        throw new AssertionError("Both locks of fork are held.");
+      }
+      turnB.accept(tsi);
+    }
+  }
+
+  public void trailingWait(Semaphore lock, boolean turnRight, SwitchPos turnout) throws CommandException {
+      waitFor(lock);
+      if (turnRight) {
+          turnout.turn_right(tsi);
+      } else {
+          turnout.turn_left(tsi);
+      }
   }
 
   interface Brain {
@@ -55,14 +86,8 @@ class TrainDriver implements Runnable {
     brain = a;
   }
 
-  void advance() throws CommandException {
-    if (trainId == 1) {
-      tsi.setSpeed(trainId, speed);
-      reversing = false;
-    } else {
-      tsi.setSpeed(trainId, -1 * speed);
-      reversing = true;
-    }
+  void drive() throws CommandException {
+    tsi.setSpeed(trainId, speed);
   }
 
   void stop() throws CommandException {
@@ -70,13 +95,8 @@ class TrainDriver implements Runnable {
   }
 
   void reverse() throws CommandException {
-    if (trainId == 1) {
-      tsi.setSpeed(trainId, -1 * speed);
-      reversing = true;
-    } else {
-      tsi.setSpeed(trainId, speed);
-      reversing = false;
-    }
+    speed = -1 * speed;
+    drive();
   }
 
   @Override
@@ -184,24 +204,12 @@ class Map {
       }
 
       if (pos.equals(sensors[6]) || pos.equals(sensors[7])) {
-        drv.waitFor(locks[3]);
-        if (pos.equals(sensors[6])) {
-          switches[0].turn_right(drv.tsi);
-        } else {
-          switches[0].turn_left(drv.tsi);
-        }
+          drv.trailingWait(locks[3], pos.equals(sensors[6]), switches[0]);
         return false;
       }
 
       if (pos.equals(sensors[9])) {
-        if (locks[4].tryAcquire()) {
-          switches[1].turn_right(drv.tsi);
-        } else {
-          if (!locks[5].tryAcquire()) {
-            throw new AssertionError("Both L4 and L5 locked! I'm starving!");
-          }
-          switches[1].turn_left(drv.tsi);
-        }
+          drv.facingWait(locks[4], switches[1]::turn_right, locks[5], switches[1]::turn_left);
         return false;
       }
 
@@ -211,24 +219,12 @@ class Map {
       }
 
       if (pos.equals(sensors[12]) || pos.equals(sensors[13])) {
-        drv.waitFor(locks[6]);
-        if (pos.equals(sensors[12])) {
-          switches[2].turn_left(drv.tsi);
-        } else {
-          switches[2].turn_right(drv.tsi);
-        }
+          drv.trailingWait(locks[6], pos.equals(sensors[13]), switches[2]);
         return false;
       }
 
       if (pos.equals(sensors[15])) {
-        if (locks[7].tryAcquire()) {
-          switches[3].turn_left(drv.tsi);
-        } else {
-          if (!locks[8].tryAcquire()) {
-            throw new AssertionError("Both L7 and L8 are locked!");
-          }
-          switches[3].turn_right(drv.tsi);
-        }
+          drv.facingWait(locks[7], switches[3]::turn_left, locks[8], switches[3]::turn_right);
         return false;
       }
 
@@ -279,54 +275,27 @@ class Map {
     @Override
     public boolean on_enter_sensor(SensorPos pos, TrainDriver drv) throws CommandException, InterruptedException {
       if (pos.equals(sensors[16]) || pos.equals(sensors[17])) {
-        System.out.println("Train #" + drv.trainId + " wants lock #" + 6);
-        drv.waitFor(locks[6]);
-        System.out.println("Train #" + drv.trainId + " got lock #" + 6);
-        if (pos.equals(sensors[16])) {
-          switches[3].turn_left(drv.tsi);
-        } else {
-          switches[3].turn_right(drv.tsi);
-        }
+          drv.trailingWait(locks[6], pos.equals(sensors[17]), switches[3]);
         return false;
       }
 
       if (pos.equals(sensors[14])) {
-        if (locks[4].tryAcquire()) {
-          switches[2].turn_left(drv.tsi);
-        } else {
-          if (!locks[5].tryAcquire()) {
-            throw new AssertionError("Both L4 and L5 locked! I'm starving!");
-          }
-          switches[2].turn_right(drv.tsi);
-        }
+          drv.facingWait(locks[4], switches[2]::turn_left, locks[5], switches[2]::turn_right);
         return false;
       }
 
       if (pos.equals(sensors[12]) || pos.equals(sensors[13])) {
-        System.out.println("Train #" + drv.trainId + " releasing lock #" + 6);
         locks[6].release();
         return false;
       }
 
       if (pos.equals(sensors[10]) || pos.equals(sensors[11])) {
-        drv.waitFor(locks[3]);
-        if (pos.equals(sensors[10])) {
-          switches[1].turn_right(drv.tsi);
-        } else {
-          switches[1].turn_left(drv.tsi);
-        }
+          drv.trailingWait(locks[3], pos.equals(sensors[10]), switches[1]);
         return false;
       }
 
       if (pos.equals(sensors[8])) {
-        if (locks[1].tryAcquire()) {
-          switches[0].turn_left(drv.tsi);
-        } else {
-          if (!locks[0].tryAcquire()) {
-            throw new AssertionError("Both L1 and L0 are locked!");
-          }
-          switches[0].turn_right(drv.tsi);
-        }
+          drv.facingWait(locks[1], switches[0]::turn_left, locks[0], switches[0]::turn_right);
         return false;
       }
 
@@ -348,7 +317,7 @@ class Map {
       if (pos.equals(sensors[0]) || pos.equals(sensors[1])) {
         drv.stop();
         Thread.sleep(1000 + 20 * Math.abs(drv.speed));
-        drv.advance();
+        drv.reverse();
         return true;
       }
       return false;
@@ -392,12 +361,20 @@ class SwitchPos extends Pos {
     super(x, y);
   }
 
-  public void turn_left(TSimInterface tsi) throws CommandException {
-    tsi.setSwitch(x, y, TSimInterface.SWITCH_LEFT);
+  public void turn_left(TSimInterface tsi) {
+    try {
+      tsi.setSwitch(x, y, TSimInterface.SWITCH_LEFT);
+    } catch (CommandException e) {
+      throw new AssertionError("Invalid switch: " + x + ", " + y);
+    }
   }
 
-  public void turn_right(TSimInterface tsi) throws CommandException {
-    tsi.setSwitch(x, y, TSimInterface.SWITCH_RIGHT);
+  public void turn_right(TSimInterface tsi)  {
+    try {
+      tsi.setSwitch(x, y, TSimInterface.SWITCH_RIGHT);
+    } catch (CommandException e) {
+      throw new AssertionError("Invalid switch: " + x + ", " + y);
+    }
   }
 }
 
