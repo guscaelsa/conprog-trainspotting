@@ -251,6 +251,7 @@ class Map {
       }
       if (pos.equals(sensors[7])) {
         locks[1].release();
+        return false;
       }
       if (pos.equals(sensors[12])) {
         locks[4].release();
