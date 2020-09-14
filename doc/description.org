@@ -1,14 +1,24 @@
+#+TITLE: Lab 1 -- Trainspotting
+#+AUTHOR: Matthijs de Vries and Elsa Carlsson
+
+#+LATEX: \clearpage
+
 * The map
+#+CAPTION: The map, with all relevant positions marked
 [[./map.png]]
 
 + A ... B :: Places of interest.
 + S, T :: We call the northern station is $S$, the southern station $T$.
 + a ... j :: Different pieces of the track.
-+ D_x :: Placement of the sensors. Corresponds to ~sensors[x]~.
++ D_x :: Placement of the sensors. Corresponds to ~sensors[x]~. The marked spot on the map is approximate.
 + S_x :: The switches. Corresponds to ~switches[x]~.
 + L_x :: The semaphores, which are binary and treated as locks. Corresponds to ~locks[x]~.
 
 * Decisions
+#+CAPTION: Railway switch terminology: Facing and Trailing
+#+ATTR_LATEX: :width 5cm
+[[./trailing-facing.png]]
+
 When a train enters or exits a sensor, there are five different possible cases:
 
 ** Facing approach
