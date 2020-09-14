@@ -1,7 +1,91 @@
 #+TITLE: Lab 1 -- Trainspotting
 #+AUTHOR: Matthijs de Vries and Elsa Carlsson
+#+OPTIONS: ':t
+
+# #+BEGIN_abstract
+# Nullam tempus.  Donec at pede.  Sed id ligula quis est convallis tempor.  In id erat non orci commodo lobortis.
+# #+END_abstract
 
 #+LATEX: \clearpage
+
+* Defining the problem
+#+CAPTION: The map given, with our labels.
+#+NAME: start
+[[./map_start.png]]
+
+In figure [[start]], we have labeled the map with lowercase letters for the different pieces of track, uppercase letters for specific places (with $S$ and $T$ being our stations), and finally the switches $S_n$ have been numbered from 0 to 3.
+
+Our task is now to ensure the trains never crash into each other and are never derailed by coming across a switch that is in the wrong direction.[fn:blocking]
+
+This problem can be split into two subproblems:
+
+1. Make sure the two trains are never on the same piece of track or operating the same switch.
+2. Make sure the trains don't collide when they reach the level junction $A$.
+
+It is useful to separate problem (2) because it is much easier to solve: we just need some sort of locking mechanism that trains must hold while crossing and release when they have crossed.
+
+For problem (1), $A$ is irrelevant and the $a$ and $c$ tracks can be treated as a single track, as can $b$ and $d$. This leaves us with the graph in fig. [[graph]].
+
+#+NAME: graph
+#+CAPTION: A graph of problem (1)
+[[./graph.png]]
+
+# For problem (1) we are now left with the graph XXX
+
+[fn:blocking] Sidenote: this means the switches are "blocking"; contrary to most railway switches in the real world they aren't automatically changed by a train going the "wrong way".
+
+* Exclusion on the graph
+We have decided to model each piece of track as an individual critical section, with no special treatment for when two tracks run in parallel. We can thus have one locking mechanism for each edge on our graph, which will ensure two trains don't run into each other on the same track:
+
+#+BEGIN_QUOTE
+/To be allowed on a track, a train must hold the associated lock./
+#+END_QUOTE
+
+For the switches, it follows that a train can only travel through a switch when it holds the locks for both the single track and one of the diverging tracks. To ensure mutual exclusion for operating the switches as well, we require that the same is true for operating them:
+
+#+BEGIN_QUOTE
+/To be allowed to operate or cross a switch, a train must hold the single track's lock as well as one of the diverging tracks' lock./
+#+END_QUOTE
+
+Next we define all the possible cases where we must ensure exclusion. Every time we enter a track, we will first want to lock the new track, then set the switch between the current and new track, and continue.
+
+#+CAPTION: The cases for approaching a switch and then entering a new track
+[[./primary-cases.png]]
+
+So approaching a switch facing and trailing is not symmetric (because when facing the train has two choices where to go, but trailing it can only go one way). However, approaching trailing from the two diverging tracks is symmetric -- the only difference is which way to set the switch.
+
+#+CAPTION: The case for leaving a track
+[[./secondary-cases.png]]
+
+On the other hand, leaving a switch is symmetric for all three tracks because you do not change the switch, you only release the relevant lock.
+
+This gives us three cases to worry about:
+
+1. Facing entry
+2. Trailing entry
+3. Exit
+
+** Another model
+There is another very reasonable way to model this problem. We might think of each single-track as a critical section, and each double-track as an uncritical section with some additional way for trains to pick an unoccupied track. We can then encapsulate each switch with its single-track.
+
+#+CAPTION: Alternative cases for entering and leaving a critical section (red)
+[[./bad-primary-cases.png]]
+
+But now entering the track is not symmetric between the two directions -- and neither is leaving -- because they affect different switches.
+
+#+CAPTION: Alternative cases for entering and leaving a non-critical section (blue)
+[[./bad-secondary-cases.png]]
+
+And we also need to consider the two cases of entering and exiting the double-tracks, giving us six cases:
+
+1. Enter single A
+2. Enter single B
+3. Exit single A
+4. Exit single B
+5. Enter double
+6. Exit double
+
+We could reinstate the symmetry of the A to the B cases by either a) Breaking the encapsulation, letting both the track and the train know which track is connected to which switches, or b) adding a level of abstraction for "which direction this train is headed in". We decided neither was worthwhile, and went with the model described in [[Exclusion on the graph]].
 
 * The map
 #+CAPTION: The map, with all relevant positions marked
