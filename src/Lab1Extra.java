@@ -7,14 +7,14 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
 public class Lab1Extra {
-  public static Map map = new Map();
+  public static MapExtra map = new MapExtra();
 
   public Lab1Extra(int speed1, int speed2) {
     TSimInterface tsi = TSimInterface.getInstance();
     tsi.setDebug(false);
 
-    new Thread(new TrainDriver(tsi, 1, speed1, map.brainA, map.brainB)).start();
-    new Thread(new TrainDriver(tsi, 2, speed2, map.brainB, map.brainA)).start();
+    new Thread(new TrainDriverExtra(tsi, 1, speed1, map.brainA, map.brainB)).start();
+    new Thread(new TrainDriverExtra(tsi, 2, speed2, map.brainB, map.brainA)).start();
   }
 }
 
