@@ -41,9 +41,9 @@ public class Main {
         TSimInterface.getInstance().setDebug(true);
         new Lab1Extra(train1_speed, train2_speed);
 
-        //p.waitFor();
-        int timeout_s = 60;
-        Thread.sleep(timeout_s * 1000);
-        p.destroyForcibly();
+        p.waitFor();
+        //int timeout_s = 60;
+        //Thread.sleep(timeout_s * 1000);
+        //p.destroyForcibly();
     }
 }

@@ -24,13 +24,11 @@ This problem can be split into two subproblems:
 
 It is useful to separate problem (2) because it is much easier to solve: we just need some sort of locking mechanism that trains must hold while crossing and release when they have crossed.
 
-For problem (1), $A$ is irrelevant and the $a$ and $c$ tracks can be treated as a single track, as can $b$ and $d$. This leaves us with the graph in fig. [[graph]].
-
 #+NAME: graph
 #+CAPTION: A graph of problem (1)
 [[./graph.png]]
 
-# For problem (1) we are now left with the graph XXX
+For problem (1), $A$ is irrelevant and the $a$ and $c$ tracks can be treated as a single track, as can $b$ and $d$. This leaves us with the graph in fig. [[graph]].
 
 [fn:blocking] Sidenote: this means the switches are "blocking"; contrary to most railway switches in the real world they aren't automatically changed by a train going the "wrong way".
 
@@ -97,6 +95,31 @@ We could reinstate the symmetry of the A to the B cases by either a) Breaking th
 + D_x :: Placement of the sensors. Corresponds to ~sensors[x]~. The marked spot on the map is approximate.
 + S_x :: The switches. Corresponds to ~switches[x]~.
 + L_x :: The semaphores, which are binary and treated as locks. Corresponds to ~locks[x]~.
+
+* Choice of maximum speed.
+We chose a max speed of 20 due based on our sensor placements, the sensors were placed three rail pieces away from any switch or intersection giving the trains three rail pieces of stopping distance. We found that at speed 20, they have just enough time to stop before they hit the switch and derail.
+
+We did notice that sensors don't seem to trigger on the center of the train, so the exact stopping distance depends on the direction the train is traveling in. This means that the exact sensor placement can likely be fine-tuned, but we felt this was outside the scope of the laboration.
+
+The ideal placement is also a case of optimization: do we want to optimize for higher train speeds or for better flow? With sensors further away from the switches, we have a bigger stopping distance and can have faster train but on the other hand it will take longer for a train to pass through a switch so other trains will have to wait longer. Still, there is likely an upper bound on the train speed from if one uses the whole of $h$ as a stopping distance.
+
+* Test
+For testing we tested a few of the different speed setups:
+
+| Train 1 speed | Train 2 speed |
+|---------------+---------------|
+| 1             | 20            |
+| 5             | 20            |
+| 10            | 20            |
+| 15            | 20            |
+| 20            | 20            |
+| 20            | 15            |
+| 20            | 10            |
+| 20            | 5             |
+| 20            | 1             |
+| 10            | 10            |
+
+We assumed that the speeds inbetween would not behave much different, and testing all speeds would take too much time. We ran a simulation for each set of train speeds for 10 minutes each and verified that none of the trains crashed.
 
 * Decisions
 #+CAPTION: Railway switch terminology: Facing and Trailing
