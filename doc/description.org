@@ -45,7 +45,9 @@ For the switches, it follows that a train can only travel through a switch when 
 /To be allowed to operate or cross a switch, a train must hold the single track's lock as well as one of the diverging tracks' lock./
 #+END_QUOTE
 
-Next we define all the possible cases where we must ensure exclusion. Every time we enter a track, we will first want to lock the new track, then set the switch between the current and new track, and continue.
+Next we define all the possible cases where we must ensure exclusion. By "case" we mean what different procedure the train may have to perform once it reaches any sensor.
+
+Every time we enter a track, we will first want to lock the new track, then set the switch between the current and new track, and continue.
 
 #+CAPTION: The cases for approaching a switch and then entering a new track
 [[./primary-cases.png]]
@@ -85,16 +87,41 @@ And we also need to consider the two cases of entering and exiting the double-tr
 
 We could reinstate the symmetry of the A to the B cases by either a) Breaking the encapsulation, letting both the track and the train know which track is connected to which switches, or b) adding a level of abstraction for "which direction this train is headed in". We decided neither was worthwhile, and went with the model described in [[Exclusion on the graph]].
 
+* Traveling through a switch
+#+CAPTION: Variable names when talking about an arbitrary switch.
+#+NAME: example
+[[./example.png]]
+
+In figure [[example]] $x, y, z$ are semaphores, $\alpha, \beta, \gamma$, are sensors, $a, b, c$ are track positions and $s$ is the switch.
+
+#+CAPTION: Railway switch terminology: Facing and Trailing
+#+ATTR_LATEX: :width 5cm
+[[./trailing-facing.png]]
+
+** Facing
+When a train approaches a switch from $a$ (facing), it must be holding the lock $x$. Once it hits $\alpha$, it must pick which of $b$ and $c$ it wants to continue on. Because there are only two trains, one of these will always be unoccupied. The train can therefore always take one of the locks $y$ and $z$, and continue on that track. Let's say that there are no other trains here, and so our train picks $b$ because that is the shorter path. Once it enters the sensor $\beta$ it will then release $x$.
+
+Another train coming to the switch trailing (e.g. from $c$) at the same time, will always stop at its sensor ($\gamma$) because the lock $x$ is taken. Since $x$ is only released upon entering $\beta$ the two trains will not collide -- the facing train has already part the switch's tile when the trailing train starts moving from $\gamma$.
+
+Because a train never waits when approaching a switch facing, it will never starve nor deadlock.
+** Trailing
+When trailing, approaching the switch from $b$ or $c$, the train holds either the lock $y$ or $z$. The train then tries to access $x$ when entering the sensors ($\beta$ or $\gamma$) and on exiting these they release either the lock $z$ or $y$. If $x$ is locked when entering the sensors the train will wait, in our case, with only 2 trains a deadlock cannot occur since there is always one free track. That is,if a train needs to stop at beta or gamma it will eventually gain access to $x$ since the train holding $x$ will be able to take either $z$ or $y$ depending on which track the trailing train is.
+* Traveling through the crossroads
+The crossroads is the simplest type of critical section; when a train enters it waits for the associated lock, and when it leaves it releases the lock.
+
+# why no deadlock or starvation?
+
+# Because this is independent of other synchronization mechanism.
 * The map
 #+CAPTION: The map, with all relevant positions marked
 [[./map.png]]
 
-+ A ... B :: Places of interest.
-+ S, T :: We call the northern station is $S$, the southern station $T$.
-+ a ... j :: Different pieces of the track.
-+ D_x :: Placement of the sensors. Corresponds to ~sensors[x]~. The marked spot on the map is approximate.
-+ S_x :: The switches. Corresponds to ~switches[x]~.
-+ L_x :: The semaphores, which are binary and treated as locks. Corresponds to ~locks[x]~.
++ $A ... B$ :: Places of interest.
++ $S, T$ :: We call the northern station is $S$, the southern station $T$.
++ $a ... j$ :: Different pieces of the track.
++ $D_i$ :: Placement of the sensors. Corresponds to ~sensors[i]~. The marked spot on the map is approximate.
++ $S_i$ :: The switches. Corresponds to ~switches[i]~.
++ $L_i$ :: The semaphores, which are binary and treated as locks. Corresponds to ~locks[i]~.
 
 * Choice of maximum speed.
 We chose a max speed of 20 due based on our sensor placements, the sensors were placed three rail pieces away from any switch or intersection giving the trains three rail pieces of stopping distance. We found that at speed 20, they have just enough time to stop before they hit the switch and derail.
@@ -122,9 +149,6 @@ For testing we tested a few of the different speed setups:
 We assumed that the speeds inbetween would not behave much different, and testing all speeds would take too much time. We ran a simulation for each set of train speeds for 10 minutes each and verified that none of the trains crashed.
 
 * Decisions
-#+CAPTION: Railway switch terminology: Facing and Trailing
-#+ATTR_LATEX: :width 5cm
-[[./trailing-facing.png]]
 
 When a train enters or exits a sensor, there are five different possible cases:
 
