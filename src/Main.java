@@ -38,11 +38,11 @@ public class Main {
         String tsimCommand = String.format("%s --speed=%d %s", tsim, tsim_speed, map);
         Process p = Runtime.getRuntime().exec(tsimCommand);
         TSimInterface.init(p.getInputStream(), p.getOutputStream());
-        TSimInterface.getInstance().setDebug(true);
+        //TSimInterface.getInstance().setDebug(true);
         new Lab1Extra(train1_speed, train2_speed);
 
         p.waitFor();
-        //int timeout_s = 60;
+        //int timeout_s = 300;
         //Thread.sleep(timeout_s * 1000);
         //p.destroyForcibly();
     }

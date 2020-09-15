@@ -9,26 +9,32 @@
 #+LATEX: \clearpage
 
 * Defining the problem
+#+BEGIN_QUOTE
+/“In this assignment you will write a program to control two trains. The purpose is to write the program so that the trains move relatively independently of each other, but without colliding.”/
+#+END_QUOTE
+
+In figure [[start]], we have labeled the map given in the assignment with lowercase letters for the different pieces of track, uppercase letters for specific places (with $S$ and $T$ being our stations), and finally the switches $S_n$ have been numbered from 0 to 3.
+
 #+CAPTION: The map given, with our labels.
+#+ATTR_LATEX: :width 10cm
 #+NAME: start
 [[./map_start.png]]
 
-In figure [[start]], we have labeled the map with lowercase letters for the different pieces of track, uppercase letters for specific places (with $S$ and $T$ being our stations), and finally the switches $S_n$ have been numbered from 0 to 3.
-
-Our task is now to ensure the trains never crash into each other and are never derailed by coming across a switch that is in the wrong direction.[fn:blocking]
+Our task is now to ensure the trains never crash into each other and are never derailed by coming across a switch that is set to the wrong direction.[fn:blocking]
 
 This problem can be split into two subproblems:
 
-1. Make sure the two trains are never on the same piece of track or operating the same switch.
-2. Make sure the trains don't collide when they reach the level junction $A$.
+1) Make sure the two trains are never on the same piece of track or operating the same switch.
+2) Make sure the trains don't collide when they reach the level junction $A$.
 
-It is useful to separate problem (2) because it is much easier to solve: we just need some sort of locking mechanism that trains must hold while crossing and release when they have crossed.
+It is useful to separate the second problem because it is much easier to solve: we just need some sort of locking mechanism that trains must hold while crossing and release when they have crossed.
+
+For the first problem, the level junction $A$ is irrelevant and thus the $a$ and $c$ tracks can be treated as a single track, as can $b$ and $d$. This leaves us with the graph in fig. [[graph]].
 
 #+NAME: graph
-#+CAPTION: A graph of problem (1)
+#+ATTR_LATEX: :width 7cm
+#+CAPTION: A graph of the first subproblem: mutual exclusion on all track pieces, i.e. on all edges on this graph.
 [[./graph.png]]
-
-For problem (1), $A$ is irrelevant and the $a$ and $c$ tracks can be treated as a single track, as can $b$ and $d$. This leaves us with the graph in fig. [[graph]].
 
 [fn:blocking] Sidenote: this means the switches are "blocking"; contrary to most railway switches in the real world they aren't automatically changed by a train going the "wrong way".
 
@@ -45,19 +51,21 @@ For the switches, it follows that a train can only travel through a switch when 
 /To be allowed to operate or cross a switch, a train must hold the single track's lock as well as one of the diverging tracks' lock./
 #+END_QUOTE
 
-Next we define all the possible cases where we must ensure exclusion. By "case" we mean what different procedure the train may have to perform once it reaches any sensor.
+Next we define all the possible cases where we must ensure exclusion. By "case" we mean what different procedures the train may have to perform once it reaches any sensor.
 
-Every time we enter a track, we will first want to lock the new track, then set the switch between the current and new track, and continue.
+Every time we enter a track, we will first want to lock the new track, set the switch between the current and new track, and then continue. Once we have left the old track we can the release the old track's lock. These must be separate cases because the train has length; it does not exit the previous track the instant it enters a new one.
 
-#+CAPTION: The cases for approaching a switch and then entering a new track
+Approaching a switch facing and trailing is not symmetric (because when facing the train has two choices where to go, but trailing it can only go one way). However, approaching trailing from the two diverging tracks is symmetric -- the only difference is which way to set the switch.
+
+#+CAPTION: The cases for approaching a switch
+#+ATTR_LATEX: :width 7cm
 [[./primary-cases.png]]
 
-So approaching a switch facing and trailing is not symmetric (because when facing the train has two choices where to go, but trailing it can only go one way). However, approaching trailing from the two diverging tracks is symmetric -- the only difference is which way to set the switch.
+On the other hand, leaving a switch is symmetric for all three tracks because you do not change the switch, you only release the relevant lock.
 
 #+CAPTION: The case for leaving a track
+#+ATTR_LATEX: :width 7cm
 [[./secondary-cases.png]]
-
-On the other hand, leaving a switch is symmetric for all three tracks because you do not change the switch, you only release the relevant lock.
 
 This gives us three cases to worry about:
 
@@ -65,15 +73,30 @@ This gives us three cases to worry about:
 2. Trailing entry
 3. Exit
 
+For each sensor (or sometimes pair of sensors), we can then set up which case it corresponds to with:
+
+#+BEGIN_SRC java
+  if (pos.equals(SPECIFIC_POS)) {
+      CASE_PROCEDURE(...);
+      return SHOULD_TURN_AROUND;
+  }
+#+END_SRC
+
+Every time a train hits a sensor, we call a function that goes through all these "case-declarations" and performs the appropriate procedure (or none of them if nothing needs to be done).
+
+Note that we need two separate functions, one called when entering a sensor and one called when leaving a sensor (because we want to specify whether case procedures should be performed on enter of exit of a sensor). Further, we need different sets of case declarations depending on which way on the track the train is currently traveling ("south-bound" or "north-bound").
+
 ** Another model
 There is another very reasonable way to model this problem. We might think of each single-track as a critical section, and each double-track as an uncritical section with some additional way for trains to pick an unoccupied track. We can then encapsulate each switch with its single-track.
 
 #+CAPTION: Alternative cases for entering and leaving a critical section (red)
+#+ATTR_LATEX: :width 7cm
 [[./bad-primary-cases.png]]
 
-But now entering the track is not symmetric between the two directions -- and neither is leaving -- because they affect different switches.
+But now entering the track is asymmetric between the two directions -- and so is leaving -- because they affect different switches.
 
 #+CAPTION: Alternative cases for entering and leaving a non-critical section (blue)
+#+ATTR_LATEX: :width 7cm
 [[./bad-secondary-cases.png]]
 
 And we also need to consider the two cases of entering and exiting the double-tracks, giving us six cases:
@@ -88,50 +111,66 @@ And we also need to consider the two cases of entering and exiting the double-tr
 We could reinstate the symmetry of the A to the B cases by either a) Breaking the encapsulation, letting both the track and the train know which track is connected to which switches, or b) adding a level of abstraction for "which direction this train is headed in". We decided neither was worthwhile, and went with the model described in [[Exclusion on the graph]].
 
 * Traveling through a switch
+#+CAPTION: Railway switch terminology: Facing and Trailing
+#+ATTR_LATEX: :width 5cm
+[[./trailing-facing.png]]
+
 #+CAPTION: Variable names when talking about an arbitrary switch.
+#+ATTR_LATEX: :width 7cm
 #+NAME: example
 [[./example.png]]
 
 In figure [[example]] $x, y, z$ are semaphores, $\alpha, \beta, \gamma$, are sensors, $a, b, c$ are track positions and $s$ is the switch.
 
-#+CAPTION: Railway switch terminology: Facing and Trailing
-#+ATTR_LATEX: :width 5cm
-[[./trailing-facing.png]]
-
 ** Facing
-When a train approaches a switch from $a$ (facing), it must be holding the lock $x$. Once it hits $\alpha$, it must pick which of $b$ and $c$ it wants to continue on. Because there are only two trains, one of these will always be unoccupied. The train can therefore always take one of the locks $y$ and $z$, and continue on that track. Let's say that there are no other trains here, and so our train picks $b$ because that is the shorter path. Once it enters the sensor $\beta$ it will then release $x$.
+When a train approaches a switch from $a$ (facing), it must be holding the lock $x$. Once it hits $\alpha$, it must pick which of $b$ and $c$ it wants to continue on. Because there are only two trains, one of $b$ and $c$ will always be unoccupied. The train can therefore always take one of the locks $y$ and $z$, and continue on that track. Let's say that there are no other trains here, and so our train picks $b$ because that is the shorter path. Once it enters the sensor $\beta$ it will then release $x$.
 
-Another train coming to the switch trailing (e.g. from $c$) at the same time, will always stop at its sensor ($\gamma$) because the lock $x$ is taken. Since $x$ is only released upon entering $\beta$ the two trains will not collide -- the facing train has already part the switch's tile when the trailing train starts moving from $\gamma$.
+If at the same time another train comes to the switch trailing (e.g. from $c$), it will always stop at e.g. sensor $\gamma$ because the lock $x$ is taken. Since $x$ is only released upon entering $\beta$ the two trains will not collide -- the facing train has already passed the switch's tile when the trailing train starts moving from $\gamma$.
 
-Because a train never waits when approaching a switch facing, it will never starve nor deadlock.
+Because a train never waits when approaching a switch facing, it will never starve nor deadlock from doing so.
 ** Trailing
-When trailing, approaching the switch from $b$ or $c$, the train holds either the lock $y$ or $z$. The train then tries to access $x$ when entering the sensors ($\beta$ or $\gamma$) and on exiting these they release either the lock $z$ or $y$. If $x$ is locked when entering the sensors the train will wait, in our case, with only 2 trains a deadlock cannot occur since there is always one free track. That is,if a train needs to stop at beta or gamma it will eventually gain access to $x$ since the train holding $x$ will be able to take either $z$ or $y$ depending on which track the trailing train is.
-* Traveling through the crossroads
-The crossroads is the simplest type of critical section; when a train enters it waits for the associated lock, and when it leaves it releases the lock.
+When trailing, approaching the switch from $b$ or $c$, the train holds either the lock $y$ or $z$. The train then tries to access $x$ when entering the sensors ($\beta$ or $\gamma$), and on exiting these they release either the lock $z$ or $y$. If $x$ is locked when entering the sensors the train will wait.
 
-# why no deadlock or starvation?
+It is okay to drop these locks e.g. $y$ at sensor $\beta$ because at that point the train already holds lock $x$, preventing any other train from being on the switch at the same time. Technically it is possible for a very fast train to travel all of $b$ and break at $\beta$ before the first train has traveled the entire breaking distance, in which case the two trains will collide. But that would require a very high speed difference between the trains, and therefore we never observed it.
 
-# Because this is independent of other synchronization mechanism.
-* The map
+In our case with only 2 trains, a deadlock cannot occur since there is always one free track. That is, if a train needs to stop at $\beta$ or $\gamma$ it will eventually gain access to $x$ since the train holding $x$ will be able to take either $z$ or $y$ depending on which track the trailing train is on.
+
+* Traveling through the level junction
+The level junction is the simplest type of critical section; when a train enters it waits for the associated lock, and when it leaves it releases the lock. But this wait is independent, i.e. not linked to any other waiting which means that it will never cause a deadlock (no circular waiting). Neither will it cause starvation, because only one train can be waiting for it at a time (for two trains to wait at the level junction we would need a third train currently using the junction).
+
+* The sensor placement
 #+CAPTION: The map, with all relevant positions marked
+#+ATTR_LATEX: :width 10cm
+#+NAME: map
 [[./map.png]]
 
+Figure [[map]] shows our complete map with all locks, switches, sensors, etc. marked.
+
+The labels should be interpreted as follows:
+
++ $D_i$ :: Placement of the sensors. Corresponds to ~sensors[i]~. The marked spot on the map is approximate.
++ $L_i$ :: The semaphores, which are binary and treated as locks. Corresponds to ~locks[i]~.
++ $S_i$ :: The switches. Corresponds to ~switches[i]~.
 + $A ... B$ :: Places of interest.
 + $S, T$ :: We call the northern station is $S$, the southern station $T$.
 + $a ... j$ :: Different pieces of the track.
-+ $D_i$ :: Placement of the sensors. Corresponds to ~sensors[i]~. The marked spot on the map is approximate.
-+ $S_i$ :: The switches. Corresponds to ~switches[i]~.
-+ $L_i$ :: The semaphores, which are binary and treated as locks. Corresponds to ~locks[i]~.
 
-* Choice of maximum speed.
-We chose a max speed of 20 due based on our sensor placements, the sensors were placed three rail pieces away from any switch or intersection giving the trains three rail pieces of stopping distance. We found that at speed 20, they have just enough time to stop before they hit the switch and derail.
+The sensors are not exactly marked, as their exact positions only change the maximum allowed speed and how well the trains flow, as discussed in section [[Choice of maximum speed]]. For reference, figure [[exact]] is a screenshot of the map with our sensors.
+
+#+CAPTION: The exact placement of our sensors
+#+ATTR_LATEX: :width 10cm
+#+NAME: exact
+[[./exact_sensors.png]]
+
+* Choice of maximum speed
+We chose a max speed of 20 based on our sensor placements, the sensors were placed three rail pieces away from any switch or intersection giving the trains three rail pieces of stopping distance. We found that at speed 20, they have just enough time to stop before they hit the switch and derail.
 
 We did notice that sensors don't seem to trigger on the center of the train, so the exact stopping distance depends on the direction the train is traveling in. This means that the exact sensor placement can likely be fine-tuned, but we felt this was outside the scope of the laboration.
 
-The ideal placement is also a case of optimization: do we want to optimize for higher train speeds or for better flow? With sensors further away from the switches, we have a bigger stopping distance and can have faster train but on the other hand it will take longer for a train to pass through a switch so other trains will have to wait longer. Still, there is likely an upper bound on the train speed from if one uses the whole of $h$ as a stopping distance.
+The ideal placement is also a case of optimization: do we want to optimize for higher train speeds or for better flow? With sensors further away from the switches, we have a longer stopping distance and we can have faster train but on the other hand it will take longer for a train to pass through a switch so other trains will have to wait longer. Still, there is likely an upper bound on the train speed once one uses the whole of $h$ as a stopping distance.
 
 * Test
-For testing we tested a few of the different speed setups:
+For testing we tested a few different speed setups:
 
 | Train 1 speed | Train 2 speed |
 |---------------+---------------|
@@ -146,100 +185,122 @@ For testing we tested a few of the different speed setups:
 | 20            | 1             |
 | 10            | 10            |
 
-We assumed that the speeds inbetween would not behave much different, and testing all speeds would take too much time. We ran a simulation for each set of train speeds for 10 minutes each and verified that none of the trains crashed.
+We assumed that the speeds inbetween would not behave much different, and testing all speeds would take too much time. We ran a simulation for each set of train speeds for 10 minutes each (using a script) and verified that none of the trains crashed.
 
-* Decisions
+* Locks
+So far we have been talking about abstract "locks", which can be implemented in many different ways. For the main assignment this is done with a binary semaphore, and for the distinction assignment we use a monitor class (the main difference is that our monitor class throws an exception if a thread attempts to release the lock when it is already released). For the procedures above, we need three methods on the locks: attempt to lock, wait and lock, and release.
 
-When a train enters or exits a sensor, there are five different possible cases:
+The specific methods for our two types of lock are:
 
-** Facing approach
-When approaching a turnout facing, the train should pick a track that currently has no train on it. As there are only two trains, at least one of the tracks leading out of a turnout will always be empty. If both are empty it should pick the shortest one, which depends on the specific turnout the train is approaching.
+|                 | With semaphore             | With ~MonitorLock~ |
+|-----------------+----------------------------+--------------------|
+| Attempt to lock | ~tryAcquire()~             | ~tryEnter()~       |
+| Wait and lock   | ~acquireUninterruptibly()~ | ~waitEnter()~      |
+| Release         | ~release()~                | ~exit()~           |
 
-With semaphores, let ~turnA()~ be the function that sets the turnout so that the train will take the shorter track and ~lockA~ be the semaphore that guards this track. Likewise, let ~turnB()~ be the function that sets the turnout to take the other track and ~lockB~ be the semaphore that guards that track. The procedure to handle a facing approach is then:
+Because there is only one method of waiting on the lock, ~MonitorLock~ needs only a single condition variable (called ~available~) which gets signaled any time the lock is released.
+
+Normally a monitor allows for more logic to be encapsulated together with the locking mechanism. However in our model each lock is associated with one track and two switches, with each switch in turn being associated with three different locks. Therefore having custom classes for the locks do not give us much of an opportunity for abstraction. We preferred to keep our locks simple so that we could keep our case definitions as:
 
 #+BEGIN_SRC java
-  if (lockA.tryAcquire()) {
-      turnA();
-  } else {
-      if (!lockB.tryAcquire()) {
-          throw new AssertionError("Both locks of fork are held.");
-      }
-      turnB();
+  if (pos.equals(SPECIFIC_POS)) {
+      CASE_PROCEDURE(...);
+      return SHOULD_TURN_AROUND;
   }
 #+END_SRC
 
-If we design our monitors to have a ~tryEnter()~ method equivalent to ~Semaphore.tryAcquire()~, the procedure is largely unchanged:
+# * Decisions
 
-#+BEGIN_SRC java
-  if (trackA.tryEnter()) {
-      turnA();
-  } else {
-      if (!trackB.tryEnter()) {
-          throw new AssertionError("Both tracks of fork are used.");
-      }
-      turnB();
-  }
-#+END_SRC
+# When a train enters or exits a sensor, there are five different possible cases:
 
-** Trailing approach
-When approaching a turnout trailing, the train must wait until the track leaving the turnout to be empty and then set the turnout to the position that will not cause derailment (as these turnout are blocking).
+# ** Facing approach
+# When approaching a turnout facing, the train should pick a track that currently has no train on it. As there are only two trains, at least one of the tracks leading out of a turnout will always be empty. If both are empty it should pick the shortest one, which depends on the specific turnout the train is approaching.
 
-With semaphores, let ~lock~ be the semaphore that guards the leaving track, ~stop()~ and ~start()~ be the functions that control the train, and ~turnRight~ be a boolean for whether the turnout should be turned right (or left) to prevent derailment. The procedure to handle a trailing approach is then:
+# With semaphores, let ~turnA()~ be the function that sets the turnout so that the train will take the shorter track and ~lockA~ be the semaphore that guards this track. Likewise, let ~turnB()~ be the function that sets the turnout to take the other track and ~lockB~ be the semaphore that guards that track. The procedure to handle a facing approach is then:
 
-#+BEGIN_SRC java
-  if (!lock.tryAcquire()) {
-      stop();
-      lock.acquireUninterruptibly();
-      drive();
-  }
+# #+BEGIN_SRC java
+#   if (lockA.tryAcquire()) {
+#       turnA();
+#   } else {
+#       if (!lockB.tryAcquire()) {
+#           throw new AssertionError("Both locks of fork are held.");
+#       }
+#       turnB();
+#   }
+# #+END_SRC
 
-  if (turnRight) {
-      turnout.turn_right(tsi);
-  } else {
-      turnout.turn_left(tsi);
-  }
-#+END_SRC
+# If we design our monitors to have a ~tryEnter()~ method equivalent to ~Semaphore.tryAcquire()~, the procedure is largely unchanged:
 
-For monitors:
+# #+BEGIN_SRC java
+#   if (trackA.tryEnter()) {
+#       turnA();
+#   } else {
+#       if (!trackB.tryEnter()) {
+#           throw new AssertionError("Both tracks of fork are used.");
+#       }
+#       turnB();
+#   }
+# #+END_SRC
 
-#+BEGIN_SRC java
-  if (!track.tryEnter()) {
-      stop();
-      track.enter();
-      drive();
-  }
+# ** Trailing approach
+# When approaching a turnout trailing, the train must wait until the track leaving the turnout to be empty and then set the turnout to the position that will not cause derailment (as these turnout are blocking).
 
-  if (turnRight) {
-      turnout.turn_right(tsi);
-  } else {
-      turnout.turn_left(tsi);
-  }
-#+END_SRC
+# With semaphores, let ~lock~ be the semaphore that guards the leaving track, ~stop()~ and ~start()~ be the functions that control the train, and ~turnRight~ be a boolean for whether the turnout should be turned right (or left) to prevent derailment. The procedure to handle a trailing approach is then:
 
-** Leaving track
-When leaving a track, the train must simply make sure that the track is now seen as empty.
+# #+BEGIN_SRC java
+#   if (!lock.tryAcquire()) {
+#       stop();
+#       lock.acquireUninterruptibly();
+#       drive();
+#   }
 
-With semaphores, you just release the semaphore.
+#   if (turnRight) {
+#       turnout.turn_right(tsi);
+#   } else {
+#       turnout.turn_left(tsi);
+#   }
+# #+END_SRC
 
-With monitors, you call its ~exit()~ method.
+# For monitors:
 
-** Entering/Exiting crossroads
-With semaphores, the crossroads are guarded by a single semaphore which must be acquired on entry and released on exit. When acquiring it you must stop if you were unable to do so immediately:
+# #+BEGIN_SRC java
+#   if (!track.tryEnter()) {
+#       stop();
+#       track.enter();
+#       drive();
+#   }
 
-#+BEGIN_SRC java
-  if (!lock.tryAcquire()) {
-      stop();
-      lock.acquireUninterruptibly();
-      drive();
-  }
-#+END_SRC
+#   if (turnRight) {
+#       turnout.turn_right(tsi);
+#   } else {
+#       turnout.turn_left(tsi);
+#   }
+# #+END_SRC
 
-With monitors, you similarly:
+# ** Leaving track
+# When leaving a track, the train must simply make sure that the track is now seen as empty.
 
-#+BEGIN_SRC java
-  if (!track.tryEnter()) {
-      stop();
-      track.enter();
-      drive();
-  }
-#+END_SRC
+# With semaphores, you just release the semaphore.
+
+# With monitors, you call its ~exit()~ method.
+
+# ** Entering/Exiting crossroads
+# With semaphores, the crossroads are guarded by a single semaphore which must be acquired on entry and released on exit. When acquiring it you must stop if you were unable to do so immediately:
+
+# #+BEGIN_SRC java
+#   if (!lock.tryAcquire()) {
+#       stop();
+#       lock.acquireUninterruptibly();
+#       drive();
+#   }
+# #+END_SRC
+
+# With monitors, you similarly:
+
+# #+BEGIN_SRC java
+#   if (!track.tryEnter()) {
+#       stop();
+#       track.enter();
+#       drive();
+#   }
+# #+END_SRC

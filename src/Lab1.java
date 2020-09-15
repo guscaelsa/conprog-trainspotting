@@ -9,7 +9,6 @@ public class Lab1 {
 
   public Lab1(int speed1, int speed2) {
     TSimInterface tsi = TSimInterface.getInstance();
-    tsi.setDebug(false);
 
     new Thread(new TrainDriver(tsi, 1, speed1, map.brainA, map.brainB)).start();
     new Thread(new TrainDriver(tsi, 2, speed2, map.brainB, map.brainA)).start();

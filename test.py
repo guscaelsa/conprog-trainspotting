@@ -22,4 +22,4 @@ for speed1, speed2 in speeds:
     print()
     print("Running with speeds", speed1, "and", speed2)
     print()
-    subprocess.run(exec_command(speed1, speed2), shell=True, stdin=None, stdout=None, stderr=None)
+    subprocess.run(exec_command(speed1, speed2), shell=True)
