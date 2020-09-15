@@ -1,6 +1,5 @@
 import TSim.*;
 
-import java.util.Objects;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -11,7 +10,7 @@ public class Lab1Extra {
 
   public Lab1Extra(int speed1, int speed2) {
     TSimInterface tsi = TSimInterface.getInstance();
-    tsi.setDebug(false);
+    tsi.setDebug(true);
 
     new Thread(new TrainDriverExtra(tsi, 1, speed1, map.brainA, map.brainB)).start();
     new Thread(new TrainDriverExtra(tsi, 2, speed2, map.brainB, map.brainA)).start();

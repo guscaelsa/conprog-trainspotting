@@ -40,7 +40,10 @@ public class Main {
         TSimInterface.init(p.getInputStream(), p.getOutputStream());
         TSimInterface.getInstance().setDebug(true);
         new Lab1Extra(train1_speed, train2_speed);
-        // new Lab1Extra(train1_speed, train2_speed);
-        p.waitFor();
+
+        //p.waitFor();
+        int timeout_s = 60;
+        Thread.sleep(timeout_s * 1000);
+        p.destroyForcibly();
     }
 }
